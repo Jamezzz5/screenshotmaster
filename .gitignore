@@ -41,8 +41,10 @@ Thumbs.db
 *.xlsx
 *.xlsm
 *.idea
+*.png
 
 config/
 temp/
 venv/
+screenshots/
 logfile.log

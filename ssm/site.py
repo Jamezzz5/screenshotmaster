@@ -4,34 +4,55 @@ import logging
 import pandas as pd
 import datetime as dt
 import ssm.utils as utl
+import ssm.imgapi as imgapi
 import selenium.webdriver as wd
 
 
 class SiteConfig(object):
     url = 'url'
+    site = 'site'
     file_name = 'file_name'
+    img_url = 'img_url'
 
-    def __init__(self, file_name='config/site_config.csv'):
+    def __init__(self, file_name='site_config.csv'):
         logging.info('Getting config from {}.'.format(file_name))
         self.file_name = file_name
+        self.file_name = os.path.join(utl.config_path, file_name)
         self.config = self.import_config()
+        self.set_all_sites()
 
     def import_config(self):
         df = pd.read_csv(self.file_name)
         config = df.to_dict(orient='index')
         return config
 
-    def set_config(self, index):
+    def set_site(self, index):
         site_dict = self.config[index]
         site = Site(site_dict)
         return site
 
-    def loop_all(self):
+    def get_site(self, index):
+        site_dict = self.config[index][self.site]
+        return site_dict
+
+    def set_all_sites(self):
+        for index in self.config:
+            site = self.set_site(index)
+            self.config[index][self.site] = site
+
+    def take_screenshots(self):
         browser = Browser()
         for index in self.config:
-            site = self.set_config(index)
+            site = self.get_site(index)
             browser.take_screenshot(site.url, site.file_name)
         browser.quit()
+
+    def upload_screenshots(self):
+        api = imgapi.ImgApi()
+        for index in self.config:
+            site = self.get_site(index)
+            url = api.upload_image(site.file_name)
+            self.config[index][self.img_url] = url
 
 
 class Site(object):

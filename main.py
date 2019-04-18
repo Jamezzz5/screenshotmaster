@@ -29,7 +29,7 @@ sys.excepthook = handle_exception
 
 def main():
     sc = sit.SiteConfig()
-    sc.loop_all()
+    sc.take_screenshots()
 
 
 if __name__ == '__main__':
