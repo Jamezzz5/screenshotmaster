@@ -6,6 +6,7 @@ import datetime as dt
 import ssm.utils as utl
 import ssm.imgapi as imgapi
 import selenium.webdriver as wd
+import selenium.common.exceptions as ex
 
 
 class SiteConfig(object):
@@ -13,6 +14,7 @@ class SiteConfig(object):
     site = 'site'
     file_name = 'file_name'
     img_url = 'img_url'
+    ads = 'ads'
 
     def __init__(self, file_name='site_config.csv'):
         logging.info('Getting config from {}.'.format(file_name))
@@ -47,6 +49,15 @@ class SiteConfig(object):
             browser.take_screenshot(site.url, site.file_name)
         browser.quit()
 
+    def take_screenshots_get_ads(self):
+        browser = Browser()
+        for index in self.config:
+            site = self.get_site(index)
+            browser.take_screenshot(site.url, site.file_name)
+            ads = browser.get_all_iframe_ads()
+            self.config[index][self.ads] = ads
+        browser.quit()
+
     def upload_screenshots(self):
         api = imgapi.ImgApi()
         for index in self.config:
@@ -59,7 +70,7 @@ class Site(object):
     prot = 'http'
     prots = 'https://'
     www = 'www'
-    tlds = ['.com', '.net', '.de', '.org', '.gov', '.edu']
+    tlds = ['.com', '.net', '.de', '.org', '.gov', '.edu', '.tv']
     base_file_path = 'screenshots'
 
     def __init__(self, site_dict=None, url=None, file_name=None):
@@ -105,22 +116,62 @@ class Site(object):
 class Browser(object):
     def __init__(self):
         self.browser = self.init_browser()
+        self.base_window = self.browser.window_handles[0]
 
     @staticmethod
     def init_browser():
         browser = wd.Chrome()
         browser.maximize_window()
+        browser.set_script_timeout(10)
         return browser
 
     def go_to_url(self, url):
         self.browser.get(url)
+        time.sleep(5)
+
+    def take_screenshot_get_ads(self, url=None, file_name=None):
+        self.take_screenshot(url=url, file_name=file_name)
+        ads = self.get_all_iframe_ads()
+        return ads
 
     def take_screenshot(self, url=None, file_name=None):
         logging.info('Getting screenshot from {} and '
                      'saving to {}.'.format(url, file_name))
         self.go_to_url(url)
-        time.sleep(5)
         self.browser.save_screenshot(file_name)
+
+    def get_all_iframes(self, url=None):
+        if url:
+            self.go_to_url(url)
+        all_iframes = self.browser.find_elements_by_tag_name('iframe')
+        all_iframes = [x for x in all_iframes if x.is_displayed()]
+        return all_iframes
+
+    def get_all_iframe_ads(self, url=None):
+        ads = []
+        all_iframes = self.get_all_iframes(url)
+        for iframe in all_iframes:
+            iframe_properties = {}
+            for x in ['width', 'height']:
+                try:
+                    iframe_properties[x] = iframe.get_attribute(x)
+                except ex.StaleElementReferenceException:
+                    logging.warning('{} element not gathered.'.format(x))
+                    iframe_properties[x] = 'None'
+            iframe.click()
+            if len(self.browser.window_handles) > 1:
+                new_window = [x for x in self.browser.window_handles
+                              if x != self.base_window][0]
+                self.browser.switch_to.window(new_window)
+                time.sleep(5)
+                iframe_properties['lp_url'] = self.browser.current_url
+                logging.info('Got iframe with properties:'
+                             ' {}'.format(iframe_properties))
+                ads.append(iframe_properties)
+                self.browser.close()
+                self.browser.switch_to.window(self.base_window)
+            time.sleep(5)
+        return ads
 
     def quit(self):
         self.browser.quit()
