@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import time
 import logging
 import requests
 import ssm.utils as utl
@@ -37,7 +38,7 @@ class ImgApi(object):
         except IOError:
             logging.error('{} not found.  Aborting.'.format(self.config_file))
             sys.exit(0)
-        self.client_id = self.config['username']
+        self.client_id = self.config['client_id']
         self.client_secret = self.config['client_secret']
         self.config_list = [self.config, self.client_id, self.client_secret]
 
@@ -65,11 +66,27 @@ class ImgApi(object):
     @staticmethod
     def get_image_data(img_file_name):
         image = utl.image_to_binary(img_file_name)
-        data = {'image': image}
+        if image:
+            data = {'image': image}
+        else:
+            data = None
         return data
 
-    def upload_image(self, img_file_name):
+    def read_image_and_upload(self, img_file_name):
+        logging.info('Uploading img {}.'.format(img_file_name))
         data = self.get_image_data(img_file_name)
+        if data:
+            url = self.upload_image(data, img_file_name)
+        else:
+            url = None
+        return url
+
+    def upload_image(self, data, img_file_name):
         r = self.make_request(url=self.upload_url, data=data, req_type='POST')
-        url = r.json()['data']['link']
+        if 'link' in r.json()['data']:
+            url = r.json()['data']['link']
+        else:
+            logging.warning('No link in response: {}'.format(r.json()))
+            time.sleep(600)
+            url = self.read_image_and_upload(img_file_name)
         return url
