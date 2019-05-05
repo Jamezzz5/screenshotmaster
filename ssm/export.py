@@ -1,4 +1,5 @@
 import os
+import io
 import sys
 import math
 import json
@@ -7,7 +8,6 @@ import logging
 import numpy as np
 import pandas as pd
 import datetime as dt
-from io import BytesIO
 import ssm.utils as utl
 import sqlalchemy as sqa
 import ssm.expcolumns as exc
@@ -232,7 +232,10 @@ class DB(object):
         self.cursor = self.connection.cursor()
 
     def df_to_output(self, df):
-        self.output = BytesIO()
+        if sys.version_info[0] == 3:
+            self.output = io.StringIO()
+        else:
+            self.output = io.BytesIO()
         df.to_csv(self.output, sep='\t', header=False, index=False,
                   encoding='utf-8')
         self.output.seek(0)
