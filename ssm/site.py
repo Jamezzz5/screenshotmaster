@@ -15,12 +15,17 @@ class SiteConfig(object):
     file_name = 'file_name'
     img_url = 'img_url'
     ads = 'ads'
+    date = 'date'
+    ss_file_path = 'screenshots'
+    output_file = 'sites.xlsx'
 
-    def __init__(self, file_name='site_config.csv'):
+    def __init__(self, file_name='site_config.csv', ss_file_path_date=None):
         logging.info('Getting config from {}.'.format(file_name))
         self.file_name = file_name
+        self.ss_file_path_date = ss_file_path_date
         self.file_name = os.path.join(utl.config_path, file_name)
         self.config = self.import_config()
+        self.ss_file_path_date = self.add_file_path(self.ss_file_path_date)
         self.set_all_sites()
 
     def import_config(self):
@@ -30,7 +35,7 @@ class SiteConfig(object):
 
     def set_site(self, index):
         site_dict = self.config[index]
-        site = Site(site_dict)
+        site = Site(site_dict, ss_file_path_date=self.ss_file_path_date)
         return site
 
     def get_site(self, index):
@@ -47,7 +52,9 @@ class SiteConfig(object):
         for index in self.config:
             site = self.get_site(index)
             browser.take_screenshot(site.url, site.file_name)
+            self.config[index][self.file_name] = site.file_name
         browser.quit()
+        self.write_config_to_df()
 
     def take_screenshots_get_ads(self):
         browser = Browser()
@@ -57,13 +64,31 @@ class SiteConfig(object):
             ads = browser.get_all_iframe_ads()
             self.config[index][self.ads] = ads
         browser.quit()
+        self.write_config_to_df()
 
     def upload_screenshots(self):
         api = imgapi.ImgApi()
         for index in self.config:
             site = self.get_site(index)
-            url = api.upload_image(site.file_name)
+            url = api.read_image_and_upload(site.file_name)
             self.config[index][self.img_url] = url
+        self.write_config_to_df()
+
+    def add_file_path(self, ss_file_path_date=None):
+        if not ss_file_path_date:
+            ss_file_path_date = dt.datetime.today().strftime('%y%m%d_%H')
+        file_path = os.path.join(self.ss_file_path, ss_file_path_date)
+        utl.dir_check(file_path)
+        return file_path
+
+    def write_config_to_df(self):
+        df = pd.DataFrame.from_dict(self.config, orient='index')
+        date = self.ss_file_path_date.split('\\')[-1]
+        date = dt.datetime.strptime(date, '%y%m%d_%H')
+        df[self.date] = date
+        output_file = os.path.join(self.ss_file_path_date, self.output_file)
+        df.to_excel(output_file, index=False)
+        df.to_excel(self.output_file, index=False)
 
 
 class Site(object):
@@ -73,9 +98,11 @@ class Site(object):
     tlds = ['.com', '.net', '.de', '.org', '.gov', '.edu', '.tv']
     base_file_path = 'screenshots'
 
-    def __init__(self, site_dict=None, url=None, file_name=None):
+    def __init__(self, site_dict=None, url=None, file_name=None,
+                 ss_file_path_date=None):
         self.url = url
         self.file_name = file_name
+        self.ss_file_path_date = ss_file_path_date
         self.site_dict = site_dict
         if site_dict:
             for k in site_dict:
@@ -84,7 +111,8 @@ class Site(object):
                                                           self.file_name)
 
     def check_url(self, url=None):
-        if url[:4] != self.prot and self.www not in url:
+        if (url[:4] != self.prot and
+                (self.www not in url and url.count('.') == 1)):
             url = '{}{}.{}'.format(self.prots, self.www, url)
         elif url[:4] != self.prot:
             url = '{}{}'.format(self.prots, url)
@@ -97,19 +125,12 @@ class Site(object):
                 file_name = file_name.replace(x, '')
             file_name = file_name.replace('.', '')
             file_name += '.png'
-        file_name = self.add_file_path(file_name)
-        return file_name
-
-    def add_file_path(self, file_name):
-        today_path = dt.datetime.today().strftime('%y%m%d_%H')
-        file_path = os.path.join(self.base_file_path, today_path)
-        utl.dir_check(file_path)
-        file_name = os.path.join(file_path, file_name)
+        file_name = os.path.join(self.ss_file_path_date, file_name)
         return file_name
 
     def check_site_params(self, url=None, file_name=None):
-        url = self.check_url(url)
         file_name = self.check_file_name(url, file_name)
+        url = self.check_url(url)
         return url, file_name
 
 
@@ -120,7 +141,9 @@ class Browser(object):
 
     @staticmethod
     def init_browser():
-        browser = wd.Chrome()
+        co = wd.chrome.options.Options()
+        co.add_argument('--disable-features=VizDisplayCompositor')
+        browser = wd.Chrome(options=co)
         browser.maximize_window()
         browser.set_script_timeout(10)
         return browser
