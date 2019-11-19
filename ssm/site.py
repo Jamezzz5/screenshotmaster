@@ -149,7 +149,11 @@ class Browser(object):
         return browser
 
     def go_to_url(self, url):
-        self.browser.get(url)
+        try:
+            self.browser.get(url)
+        except ex.TimeoutException:
+            logging.warning('Timeout exception, retrying.')
+            self.go_to_url(url)
         time.sleep(5)
 
     def take_screenshot_get_ads(self, url=None, file_name=None):
