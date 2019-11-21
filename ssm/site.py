@@ -16,6 +16,9 @@ class SiteConfig(object):
     img_url = 'img_url'
     ads = 'ads'
     date = 'date'
+    device = 'device'
+    device_mobile = 'Mobile'
+    device_desktop = 'Desktop'
     ss_file_path = 'screenshots'
     output_file = 'sites.xlsx'
 
@@ -26,6 +29,7 @@ class SiteConfig(object):
         self.file_name = os.path.join(utl.config_path, file_name)
         self.config = self.import_config()
         self.ss_file_path_date = self.add_file_path(self.ss_file_path_date)
+        self.add_device_to_config()
         self.set_all_sites()
 
     def import_config(self):
@@ -47,10 +51,21 @@ class SiteConfig(object):
             site = self.set_site(index)
             self.config[index][self.site] = site
 
+    def add_device_to_config(self):
+        total_indices = max(self.config) + 1
+        for index in range(total_indices):
+            new_index = index + total_indices
+            self.config[index][self.device] = self.device_desktop
+            self.config[new_index] = self.config[index].copy()
+            self.config[new_index][self.device] = self.device_mobile
+
     def take_screenshots(self):
         browser = Browser()
         for index in self.config:
             site = self.get_site(index)
+            if site.device == self.device_mobile and not browser.mobile:
+                browser.quit()
+                browser = Browser(mobile=True)
             browser.take_screenshot(site.url, site.file_name)
             self.config[index][self.file_name] = site.file_name
         browser.quit()
@@ -99,16 +114,17 @@ class Site(object):
     base_file_path = 'screenshots'
 
     def __init__(self, site_dict=None, url=None, file_name=None,
-                 ss_file_path_date=None):
+                 ss_file_path_date=None, device=None):
         self.url = url
         self.file_name = file_name
+        self.device = device
         self.ss_file_path_date = ss_file_path_date
         self.site_dict = site_dict
         if site_dict:
             for k in site_dict:
                 setattr(self, k, site_dict[k])
-        self.url, self.file_name = self.check_site_params(self.url,
-                                                          self.file_name)
+        self.url, self.file_name = self.check_site_params(
+            self.url, self.file_name, self.device)
 
     def check_url(self, url=None):
         if (url[:4] != self.prot and
@@ -118,31 +134,37 @@ class Site(object):
             url = '{}{}'.format(self.prots, url)
         return url
 
-    def check_file_name(self, url=None, file_name=None):
+    def check_file_name(self, url=None, file_name=None, device=None):
         if url and not file_name:
             file_name = url
             for x in [self.prots, self.www] + self.tlds:
                 file_name = file_name.replace(x, '')
             file_name = file_name.replace('.', '')
+            if device:
+                file_name = '{}_{}'.format(file_name, device)
             file_name += '.png'
         file_name = os.path.join(self.ss_file_path_date, file_name)
         return file_name
 
-    def check_site_params(self, url=None, file_name=None):
-        file_name = self.check_file_name(url, file_name)
+    def check_site_params(self, url=None, file_name=None, device=None):
+        file_name = self.check_file_name(url, file_name, device)
         url = self.check_url(url)
         return url, file_name
 
 
 class Browser(object):
-    def __init__(self):
-        self.browser = self.init_browser()
+    def __init__(self, mobile=False):
+        self.mobile = mobile
+        self.browser = self.init_browser(self.mobile)
         self.base_window = self.browser.window_handles[0]
 
     @staticmethod
-    def init_browser():
+    def init_browser(mobile=False):
         co = wd.chrome.options.Options()
         co.add_argument('--disable-features=VizDisplayCompositor')
+        if mobile:
+            mobile_emulation = {"deviceName": "iPhone X"}
+            co.add_experimental_option("mobileEmulation", mobile_emulation)
         browser = wd.Chrome(options=co)
         browser.maximize_window()
         browser.set_script_timeout(10)
