@@ -161,7 +161,12 @@ class Browser(object):
     @staticmethod
     def init_browser(mobile=False):
         co = wd.chrome.options.Options()
+        co.headless = True
         co.add_argument('--disable-features=VizDisplayCompositor')
+        co.add_argument('--window-size=1920,1080')
+        co.add_argument('--start-maximized')
+        co.add_argument('--no-sandbox')
+        co.add_argument('--disable-gpu')
         if mobile:
             mobile_emulation = {"deviceName": "iPhone X"}
             co.add_experimental_option("mobileEmulation", mobile_emulation)
